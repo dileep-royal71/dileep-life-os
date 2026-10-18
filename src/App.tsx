@@ -60,15 +60,61 @@ const initialTemplates: AppData['templates'] = [
 const pythonTopics = ['Python fundamentals', 'Variables and data types', 'Operators', 'Conditionals', 'Loops', 'Strings', 'Lists, tuples, sets & dictionaries', 'Functions', 'Recursion', 'Object-oriented programming', 'Exceptions', 'File handling', 'Modules & packages', 'Iterators & generators', 'Data structures & algorithms', 'Problem-solving practice', 'NumPy & Pandas', 'Mini-projects']
 const sqlTopics = ['Database fundamentals', 'SELECT and WHERE', 'ORDER BY and DISTINCT', 'Aggregate functions', 'GROUP BY and HAVING', 'Joins', 'Subqueries', 'Common table expressions', 'CASE expressions', 'Constraints and keys', 'Normalization', 'Indexes', 'Views', 'Window functions', 'Query optimization', 'Interview practice']
 const subjects = ['Quantitative Aptitude', 'General Intelligence & Reasoning', 'English Comprehension', 'General Awareness']
-const exercises = [
-  { name: 'Barbell bench press', group: 'Chest' }, { name: 'Incline dumbbell press', group: 'Chest' }, { name: 'Machine chest press', group: 'Chest' }, { name: 'Cable fly', group: 'Chest' }, { name: 'Push-ups', group: 'Chest' },
-  { name: 'Rope triceps pushdown', group: 'Triceps' }, { name: 'Overhead cable extension', group: 'Triceps' }, { name: 'Assisted dips', group: 'Triceps' },
-  { name: 'Lat pulldown', group: 'Back' }, { name: 'Seated cable row', group: 'Back' }, { name: 'Chest-supported row', group: 'Back' }, { name: 'One-arm dumbbell row', group: 'Back' }, { name: 'Straight-arm pulldown', group: 'Back' },
-  { name: 'Dumbbell curls', group: 'Biceps' }, { name: 'Incline dumbbell curls', group: 'Biceps' }, { name: 'Hammer curls', group: 'Biceps' }, { name: 'Cable curls', group: 'Biceps' },
-  { name: 'Barbell squat / alternative', group: 'Legs' }, { name: 'Leg press', group: 'Legs' }, { name: 'Romanian deadlift', group: 'Legs' }, { name: 'Leg extension', group: 'Legs' }, { name: 'Standing calf raises', group: 'Legs' },
-  { name: 'Seated dumbbell shoulder press', group: 'Shoulders' }, { name: 'Dumbbell lateral raises', group: 'Shoulders' }, { name: 'Reverse pec-deck fly', group: 'Shoulders' }, { name: 'Face pulls', group: 'Shoulders' },
-  { name: 'Plank', group: 'Core' }, { name: 'Dead bug', group: 'Core' }, { name: 'Cable crunch', group: 'Core' }, { name: 'Hanging knee raises', group: 'Core' },
+type WorkoutExercise = { name: string; group: string; target: string; sets: number; reps: string; rest: string }
+type WorkoutDay = { day: number; label: string; title: string; focus: string; exercises: WorkoutExercise[]; isRest?: boolean }
+const workoutSplit: WorkoutDay[] = [
+  { day: 0, label: 'Sun', title: 'Rest & recovery', focus: 'Full-body recovery', isRest: true, exercises: [] },
+  { day: 1, label: 'Mon', title: 'Push A', focus: 'Upper chest · mid chest · front/side delts · triceps', exercises: [
+    { name: 'Incline dumbbell press', group: 'Chest', target: 'Upper chest', sets: 3, reps: '6–10', rest: '2 min' },
+    { name: 'Barbell bench press', group: 'Chest', target: 'Mid chest', sets: 3, reps: '6–10', rest: '2–3 min' },
+    { name: 'Cable fly', group: 'Chest', target: 'Chest adduction', sets: 2, reps: '10–15', rest: '60–90 sec' },
+    { name: 'Seated dumbbell shoulder press', group: 'Shoulders', target: 'Front delts', sets: 3, reps: '8–12', rest: '90 sec' },
+    { name: 'Dumbbell lateral raises', group: 'Shoulders', target: 'Side delts', sets: 3, reps: '12–20', rest: '60 sec' },
+    { name: 'Rope triceps pushdown', group: 'Triceps', target: 'Lateral/medial triceps', sets: 3, reps: '10–15', rest: '60 sec' },
+  ] },
+  { day: 2, label: 'Tue', title: 'Pull A', focus: 'Lats · mid-back · rear delts · biceps · brachialis', exercises: [
+    { name: 'Lat pulldown', group: 'Back', target: 'Lats / upper back', sets: 3, reps: '8–12', rest: '90 sec' },
+    { name: 'Chest-supported row', group: 'Back', target: 'Rhomboids / mid traps', sets: 3, reps: '8–12', rest: '90 sec' },
+    { name: 'Face pulls', group: 'Shoulders', target: 'Rear delts / upper back', sets: 3, reps: '12–20', rest: '60 sec' },
+    { name: 'Incline dumbbell curls', group: 'Biceps', target: 'Biceps long head', sets: 3, reps: '8–12', rest: '60 sec' },
+    { name: 'Hammer curls', group: 'Biceps', target: 'Brachialis / forearms', sets: 3, reps: '10–15', rest: '60 sec' },
+    { name: 'Wrist curls', group: 'Forearms', target: 'Forearm flexors', sets: 2, reps: '12–20', rest: '45–60 sec' },
+  ] },
+  { day: 3, label: 'Wed', title: 'Legs A', focus: 'Quads · hamstrings · calves · anterior core', exercises: [
+    { name: 'Barbell squat / alternative', group: 'Legs', target: 'Quads / glutes', sets: 3, reps: '6–10', rest: '2–3 min' },
+    { name: 'Romanian deadlift', group: 'Legs', target: 'Hamstrings / glutes', sets: 3, reps: '8–12', rest: '2 min' },
+    { name: 'Leg extension', group: 'Legs', target: 'Quadriceps', sets: 3, reps: '10–15', rest: '60–90 sec' },
+    { name: 'Seated leg curl', group: 'Legs', target: 'Hamstrings', sets: 3, reps: '10–15', rest: '60–90 sec' },
+    { name: 'Standing calf raises', group: 'Calves', target: 'Gastrocnemius', sets: 3, reps: '10–15', rest: '60 sec' },
+    { name: 'Plank', group: 'Core', target: 'Abdominals / trunk stability', sets: 3, reps: '30–60 sec', rest: '45–60 sec' },
+  ] },
+  { day: 4, label: 'Thu', title: 'Push B', focus: 'Mid/lower chest · side delts · triceps long head', exercises: [
+    { name: 'Machine chest press', group: 'Chest', target: 'Mid chest', sets: 3, reps: '8–12', rest: '90 sec' },
+    { name: 'Assisted dips', group: 'Chest', target: 'Lower chest / triceps', sets: 3, reps: '8–12', rest: '90 sec' },
+    { name: 'Push-ups', group: 'Chest', target: 'Chest / serratus', sets: 2, reps: 'Near technical failure', rest: '60 sec' },
+    { name: 'Dumbbell lateral raises', group: 'Shoulders', target: 'Side delts', sets: 3, reps: '12–20', rest: '60 sec' },
+    { name: 'Overhead cable extension', group: 'Triceps', target: 'Triceps long head', sets: 3, reps: '10–15', rest: '60 sec' },
+    { name: 'Rope triceps pushdown', group: 'Triceps', target: 'Lateral/medial triceps', sets: 2, reps: '12–15', rest: '60 sec' },
+  ] },
+  { day: 5, label: 'Fri', title: 'Pull B', focus: 'Lats · traps · rear delts · biceps · forearms', exercises: [
+    { name: 'One-arm dumbbell row', group: 'Back', target: 'Lats / mid-back', sets: 3, reps: '8–12 each side', rest: '90 sec' },
+    { name: 'Seated cable row', group: 'Back', target: 'Rhomboids / mid traps', sets: 3, reps: '8–12', rest: '90 sec' },
+    { name: 'Straight-arm pulldown', group: 'Back', target: 'Lats', sets: 2, reps: '12–15', rest: '60 sec' },
+    { name: 'Reverse pec-deck fly', group: 'Shoulders', target: 'Rear delts', sets: 3, reps: '12–20', rest: '60 sec' },
+    { name: 'Cable curls', group: 'Biceps', target: 'Biceps', sets: 3, reps: '10–15', rest: '60 sec' },
+    { name: 'Dumbbell curls', group: 'Biceps', target: 'Biceps / forearms', sets: 2, reps: '10–15', rest: '60 sec' },
+  ] },
+  { day: 6, label: 'Sat', title: 'Legs B', focus: 'Quads · glutes · hamstrings · calves · full core', exercises: [
+    { name: 'Leg press', group: 'Legs', target: 'Quads / glutes', sets: 3, reps: '8–12', rest: '2 min' },
+    { name: 'Bulgarian split squat', group: 'Legs', target: 'Quads / glutes / adductors', sets: 3, reps: '8–12 each side', rest: '90 sec' },
+    { name: 'Hip thrust', group: 'Glutes', target: 'Glute max', sets: 3, reps: '8–12', rest: '90 sec' },
+    { name: 'Seated leg curl', group: 'Legs', target: 'Hamstrings', sets: 3, reps: '10–15', rest: '60–90 sec' },
+    { name: 'Seated calf raises', group: 'Calves', target: 'Soleus', sets: 3, reps: '12–20', rest: '60 sec' },
+    { name: 'Hanging knee raises', group: 'Core', target: 'Lower abs / hip flexors', sets: 3, reps: '8–15', rest: '60 sec' },
+    { name: 'Dead bug', group: 'Core', target: 'Deep core / anti-extension', sets: 2, reps: '8–12 each side', rest: '45 sec' },
+  ] },
 ]
+const exercises = [...new Map(workoutSplit.flatMap(day => day.exercises).map(exercise => [exercise.name, exercise] as const)).values()]
 
 function localDate(timezone: string) {
   try {
@@ -556,7 +602,71 @@ function LifeOS({ userId, userName, onSignOut }: { userId: string; userName: str
     return <><div className="calendar-head"><button className="icon-button" aria-label="Previous month" onClick={() => setCalendarMonth(new Date(year, month - 1, 1))}><ChevronLeft size={18} /></button><strong>{calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</strong><button className="icon-button" aria-label="Next month" onClick={() => setCalendarMonth(new Date(year, month + 1, 1))}><ChevronRight size={18} /></button></div><div className="calendar-grid">{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => <div className="weekday" key={day}>{day}</div>)}{cells}</div></>
   }
 
+  const trainingPage = () => {
+    const selectedDay = new Date(`${selectedDate}T12:00:00`).getDay()
+    const selectedWorkout = workoutSplit.find(workout => workout.day === selectedDay) ?? workoutSplit[0]
+    const weekStart = new Date(`${selectedDate}T12:00:00`)
+    weekStart.setDate(weekStart.getDate() - (weekStart.getDay() + 6) % 7)
+    const weekDates = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(weekStart)
+      date.setDate(date.getDate() + index)
+      return localDateForDate(date)
+    })
+    const visibleExercises = selectedWorkout.exercises.filter(exercise => `${exercise.name} ${exercise.group} ${exercise.target}`.toLowerCase().includes(exerciseSearch.toLowerCase()))
+    const muscleGroups = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Forearms', 'Legs', 'Glutes', 'Calves', 'Core']
+    return <>
+      <div className="page-toolbar"><div><p className="eyebrow">6-DAY PUSH / PULL / LEGS · ONE RECOVERY DAY</p><h2>Training log</h2></div><div className="toolbar-actions">{dateControls}<span className="safety-tag"><ShieldAlert size={15} /> Stop if you feel sharp pain</span></div></div>
+      <Card className="weekly-plan-card">
+        <div className="card-heading"><div><p className="eyebrow">WEEKLY ROTATION</p><h3>Every major muscle, twice per week</h3></div><span className="status-pill">Selected date: {selectedWorkout.title}</span></div>
+        <div className="weekly-plan">{weekDates.map((date, index) => {
+          const workout = workoutSplit.find(item => item.day === (index + 1) % 7) ?? workoutSplit[0]
+          const isSelected = date === selectedDate
+          const isToday = date === today
+          return <button key={date} className={`weekly-day ${isSelected ? 'selected' : ''} ${workout.isRest ? 'recovery-day' : ''}`} aria-pressed={isSelected} onClick={() => setSelectedDate(date)}>
+            <span className="weekly-day-name">{workout.label}</span><strong>{workout.title}</strong><small>{isToday ? 'Today · ' : ''}{workout.focus.split(' · ').slice(0, 2).join(' · ')}</small>
+          </button>
+        })}</div>
+      </Card>
+      <div className="training-layout">
+        <Card>
+          <div className="card-heading"><div><p className="eyebrow">{selectedDisplay.toUpperCase()} · {selectedWorkout.focus.toUpperCase()}</p><h3>{selectedWorkout.isRest ? 'Rest & recovery' : selectedWorkout.title}</h3></div><span className="status-pill">{data.finishedWorkouts.includes(selectedDate) ? 'Finished' : selectedWorkout.isRest ? 'Recovery day' : 'In progress'}</span></div>
+          {selectedWorkout.isRest ? <div className="recovery-note"><h4>Let your body adapt</h4><p>Take a full rest day or choose easy walking and gentle mobility. Sleep, hydration and recovery are part of the plan—not missed workouts.</p></div> : <>
+            <p className="subtle">Warm up before working sets. Use controlled form and finish most sets with about 1–3 good reps in reserve.</p>
+            <div className="exercise-search"><Search size={16} /><input placeholder="Search today's exercises or muscles…" value={exerciseSearch} onChange={event => setExerciseSearch(event.target.value)} /></div>
+            <div className="exercise-list">{visibleExercises.map(exercise => {
+              const key = `${selectedDate}:${exercise.name}`
+              const savedChecks = data.setLogs[key] ?? []
+              const checks = Array.from({ length: exercise.sets }, (_, index) => savedChecks[index] ?? false)
+              return <div className="exercise-card" key={exercise.name}>
+                <div className="exercise-description"><strong>{exercise.name}</strong><span>{exercise.group} · {exercise.target}</span><small>{exercise.sets} sets × {exercise.reps} reps · Rest {exercise.rest}</small></div>
+                <div className="set-checks">{checks.map((done, index) => <button key={index} className={`set-chip ${done ? 'set-done' : ''}`} aria-label={`${exercise.name} set ${index + 1}`} aria-pressed={done} onClick={() => setData(previous => {
+                  const previousChecks = previous.setLogs[key] ?? []
+                  const nextChecks = Array.from({ length: exercise.sets }, (_, setIndex) => setIndex === index ? !(previousChecks[setIndex] ?? false) : previousChecks[setIndex] ?? false)
+                  return { ...previous, setLogs: { ...previous.setLogs, [key]: nextChecks } }
+                })}>Set {index + 1}{done && <Check size={12} />}</button>)}</div>
+              </div>
+            })}</div>
+            {visibleExercises.length === 0 && <div className="empty-state"><p>No exercises match that search in this session.</p></div>}
+            <button className="button button-primary finish-workout" onClick={() => {
+              if (data.finishedWorkouts.includes(selectedDate)) { setToast('Workout was already finished for this date'); return }
+              setData(previous => ({ ...previous, finishedWorkouts: [...previous.finishedWorkouts, selectedDate] }))
+              setToast('Workout finished and saved')
+            }}><CheckCircle2 size={16} /> Finish workout</button>
+          </>}
+          <p className="fine-print">Set checks and workout completion save against this date and sync with your account. Scale or substitute movements to suit your equipment; stop if you feel pain.</p>
+        </Card>
+        <Card>
+          <div className="card-heading"><div><p className="eyebrow">BALANCED COVERAGE</p><h3>Muscle regions</h3></div><Dumbbell className="muted-icon" size={20} /></div>
+          {muscleGroups.map(group => <div className="muscle-row" key={group}><span>{group}</span><strong>{exercises.filter(exercise => exercise.group === group).length} movements</strong></div>)}
+          <div className="inline-note compact-note"><CircleHelp size={15} /><span>The A/B variations distribute weekly volume across upper/lower chest, back and lats, all deltoid heads, arms, quads, hamstrings, glutes, calves and core.</span></div>
+          <div className="recovery-note compact-recovery"><strong>Progress gradually</strong><p>When every set reaches the top of its rep range with good form, increase the load slightly. Take an extra rest day when recovery calls for it.</p></div>
+        </Card>
+      </div>
+    </>
+  }
+
   const pageContent = () => {
+    if (page === 'Training') return trainingPage()
     if (page === 'Overview') return <>
       <section className="welcome-row"><div><p className="eyebrow">{greeting.toUpperCase()}</p><h2>{data.profile.name.split(' ')[1] ?? data.profile.name}<span className="accent">.</span></h2><p className="welcome-meta">{clock.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}<span className="meta-dot" />{clock.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: data.profile.timezone })} {data.profile.timezone.split('/').at(-1)?.replace('_', ' ')}</p></div><div className="age-card"><span>YOUR AGE</span><strong>{age ? `${age.years}y ${age.months}m ${age.days}d` : 'Add birth date'}</strong><small>Calculated from your date of birth</small></div></section>
       <section className="stat-grid">
@@ -574,7 +684,6 @@ function LifeOS({ userId, userName, onSignOut }: { userId: string; userName: str
     </>
     if (page === 'Schedule') return <><div className="page-toolbar"><div><p className="eyebrow">DATE-SPECIFIC ACTIVITY RECORDS</p><h2>{selectedDisplay}</h2></div><div className="toolbar-actions">{dateControls}<button className="button button-primary" onClick={addActivity}><Plus size={16} /> Add activity</button></div></div><Card><div className="card-heading"><div><h3>Daily timetable</h3><p className="subtle">Completion is never inferred from the time. Only your explicit updates count.</p></div><div className="filter-select"><span>Filter</span><select aria-label="Filter activities" value={activityFilter} onChange={event => setActivityFilter(event.target.value)}>{categoryOptions.map(item => <option key={item}>{item}</option>)}</select></div></div><Progress value={dayProgress} label={`${completeCount} completed · ${activities.filter(item => item.status === 'Skipped').length} skipped · ${activities.length} planned`} />{activityList()}</Card><div className="inline-note"><CircleHelp size={16} /><span>Every date has an independent schedule. Your activity status, notes, and completion time are saved locally on this device.</span></div></>
     if (page === 'Calendar') return <><div className="page-toolbar"><div><p className="eyebrow">MONTHLY ACTIVITY VIEW</p><h2>Calendar</h2></div><button className="button button-muted" onClick={goToday}>Go to today</button></div><Card className="calendar-card">{calendarContent()}<div className="calendar-legend"><span><i className="legend-dot complete-dot" /> Completed</span><span><i className="legend-dot pending-dot" /> Planned</span><span>Click a day to open its timetable</span></div></Card></>
-    if (page === 'Training') return <><div className="page-toolbar"><div><p className="eyebrow">5-DAY STRENGTH SPLIT · FLEXIBLE REST DAYS</p><h2>Training log</h2></div><div className="toolbar-actions">{dateControls}<span className="safety-tag"><ShieldAlert size={15} /> Stop if you feel sharp pain</span></div></div><div className="training-layout"><Card><div className="card-heading"><div><p className="eyebrow">{selectedDisplay.toUpperCase()}</p><h3>{data.finishedWorkouts.includes(selectedDate) ? 'Session completed' : 'Chest + Triceps'}</h3></div><span className="status-pill">{data.finishedWorkouts.includes(selectedDate) ? 'Finished' : 'In progress'}</span></div><p className="subtle">Default split is a starting point. Choose exercises; only explicitly completed sets are recorded.</p><div className="exercise-search"><Search size={16} /><input placeholder="Search exercise library…" value={exerciseSearch} onChange={event => setExerciseSearch(event.target.value)} /></div><div className="exercise-list">{exercises.filter(item => `${item.name} ${item.group}`.toLowerCase().includes(exerciseSearch.toLowerCase())).slice(0, 12).map(exercise => { const key = `${selectedDate}:${exercise.name}`; const checks = data.setLogs[key] ?? [false, false, false]; return <div className="exercise-card" key={exercise.name}><div><strong>{exercise.name}</strong><span>{exercise.group} · 3 sets × 8–12 reps · Dumbbell/bodyweight alternatives as available</span></div><div className="set-checks">{checks.map((done, index) => <button key={index} className={`set-chip ${done ? 'set-done' : ''}`} aria-label={`${exercise.name} set ${index + 1}`} onClick={() => setData(previous => ({ ...previous, setLogs: { ...previous.setLogs, [key]: checks.map((value, i) => i === index ? !value : value) } }))}>Set {index + 1}{done && <Check size={12} />}</button>)}</div></div>})}</div><button className="button button-primary finish-workout" onClick={() => { if (data.finishedWorkouts.includes(selectedDate)) { setToast('Workout was already finished for this date'); return } setData(previous => ({ ...previous, finishedWorkouts: [...previous.finishedWorkouts, selectedDate] })); setToast('Workout finished and saved') }}><CheckCircle2 size={16} /> Finish workout</button><p className="fine-print">Past set logs remain saved if you leave or refresh. Consider technique and recovery; do not train through sharp pain.</p></Card><Card><div className="card-heading"><div><p className="eyebrow">EXERCISE FINDER</p><h3>Muscle groups</h3></div><Dumbbell className="muted-icon" size={20} /></div>{['Chest', 'Triceps', 'Back', 'Biceps', 'Legs', 'Shoulders', 'Core'].map(group => <div className="muscle-row" key={group}><span>{group}</span><strong>{exercises.filter(item => item.group === group).length} exercises</strong></div>)}<div className="inline-note compact-note"><CircleHelp size={15} /><span>Substitute squats with a suitable movement for available equipment. No leg curl machine assumed.</span></div></Card></div></>
     if (page === 'Weight') {
       const lost = latestWeight ? data.profile.startWeight - latestWeight.weight : 0
       return <><div className="page-toolbar"><div><p className="eyebrow">MEASUREMENTS, NOT GUESSES</p><h2>Weight journey</h2></div><button className="button button-primary" onClick={addWeight}><Plus size={16} /> Add weigh-in</button></div><section className="stat-grid"><Stat icon={Weight} label="Latest measurement" value={latestWeight ? `${latestWeight.weight} kg` : 'No weigh-in'} detail={latestWeight ? `Recorded ${latestWeight.date}` : `Starting reference: ${data.profile.startWeight} kg`} accent="blue" /><Stat icon={TrendingDown} label="Change from start" value={latestWeight ? `${lost > 0 ? '−' : '+'}${Math.abs(lost).toFixed(1)} kg` : 'Not measured'} detail="Based on latest saved entry" accent="violet" /><Stat icon={Target} label="Remaining to goal" value={`${Math.max(0, (latestWeight?.weight ?? data.profile.startWeight) - data.profile.goalWeight).toFixed(1)} kg`} detail={`Goal: ${data.profile.goalWeight} kg`} accent="orange" /></section><Card><div className="card-heading"><div><p className="eyebrow">RECORDED ENTRIES</p><h3>Weight trend</h3></div><span className="subtle">No sample measurements</span></div>{weightChart()}</Card><Card className="history-card"><h3>Measurement history</h3>{data.weights.length ? [...data.weights].sort((a, b) => b.date.localeCompare(a.date)).map(item => <div className="history-row" key={item.id}><span>{item.date}</span><strong>{item.weight} kg</strong><span>{item.waist ? `Waist ${item.waist} cm` : item.notes || '—'}</span></div>) : <Empty text="Your first saved weigh-in will appear here." />}</Card></>

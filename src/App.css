@@ -157,6 +157,14 @@ h3 { margin: 0; font-size: 13px; letter-spacing: -.15px; font-weight: 700; }
 .calendar-legend { display: flex; align-items: center; gap: 17px; margin-top: 16px; color: var(--muted); font-size: 9px; }
 .calendar-legend span:last-child { margin-left: auto; color: var(--muted-2); }
 .legend-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }.complete-dot { background: var(--green); }.pending-dot { background: var(--border-strong); }
+.weekly-plan-card { margin: 0 0 14px; }
+.weekly-plan { display: grid; grid-template-columns: repeat(7,minmax(100px,1fr)); gap: 7px; overflow-x: auto; padding-bottom: 3px; }
+.weekly-day { display: grid; align-content: start; gap: 6px; min-height: 82px; padding: 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-raised); color: var(--text); text-align: left; cursor: pointer; }
+.weekly-day.selected { border-color: var(--blue); background: #5485ed13; }
+.weekly-day.recovery-day { background: var(--surface); }
+.weekly-day-name { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
+.weekly-day strong { font-size: 9px; }
+.weekly-day small { color: var(--muted); font-size: 8px; line-height: 1.4; }
 .training-layout,.reports-grid,.settings-layout { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(240px,.8fr); gap: 14px; align-items: start; }
 .training-layout > .card,.settings-layout > .card { margin: 0; }
 .safety-tag { display: inline-flex; gap: 6px; align-items: center; font-size: 9px; color: var(--orange); }
@@ -168,12 +176,18 @@ h3 { margin: 0; font-size: 13px; letter-spacing: -.15px; font-weight: 700; }
 .exercise-card strong,.exercise-card span { display: block; }
 .exercise-card strong { font-size: 10px; }
 .exercise-card span { font-size: 8px; color: var(--muted); margin-top: 4px; }
+.exercise-card small { display: block; margin-top: 4px; color: var(--muted-2); font-size: 8px; }
+.exercise-description { min-width: 0; }
 .set-checks { display: flex; gap: 4px; flex: none; }
 .set-chip { display: flex; align-items: center; gap: 3px; min-height: 25px; background: var(--surface-raised); border: 1px solid var(--border); border-radius: 5px; padding: 0 6px; font-size: 8px; color: var(--muted); cursor: pointer; }
 .set-chip.set-done { color: var(--green); border-color: #5eaa854d; background: #4e98781a; }
 .finish-workout { margin-top: 14px; }
 .fine-print { margin: 13px 0 0; color: var(--muted-2); font-size: 8px; line-height: 1.5; }
 .muscle-row,.report-metric { display: flex; align-items: center; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid var(--border); font-size: 10px; }.muscle-row:last-of-type,.report-metric:last-of-type { border-bottom: 0; }.muscle-row strong,.report-metric strong { font-size: 9px; color: var(--muted); font-weight: 500; }
+.recovery-note { margin-top: 15px; padding: 13px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-raised); }
+.recovery-note h4,.recovery-note strong { margin: 0; font-size: 10px; }
+.recovery-note p { margin: 6px 0 0; color: var(--muted); font-size: 9px; line-height: 1.55; }
+.compact-recovery { padding: 11px; }
 .nutrition-top { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }.nutrition-top .card { margin: 0; }
 .macro-total { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 21px 0 14px; }.macro-total strong { font: 700 25px Manrope,sans-serif; }.macro-total small { font: 500 11px 'DM Sans',sans-serif; color: var(--muted); }.macro-total span { font-size: 8px; color: var(--muted); text-align: right; }
 .macro-grid { display: grid; grid-template-columns: repeat(3,1fr); margin-top: 15px; padding-top: 12px; border-top: 1px solid var(--border); }.macro-grid div { display: grid; gap: 5px; }.macro-grid span { font-size: 8px; color: var(--muted); }.macro-grid strong { font-size: 11px; }
