@@ -34,11 +34,12 @@ The app uses Supabase Auth (email/password) and stores each signed-in user's Lif
 1. Create a project at [Supabase](https://supabase.com/dashboard). Keep the database password private.
 2. In **SQL Editor**, run [`supabase/migrations/20261018000000_user_life_os_data.sql`](./supabase/migrations/20261018000000_user_life_os_data.sql).
 3. In **Authentication → URL Configuration**, set the site URL to `https://dileep-royal71.github.io/dileep-life-os/` and allow that URL plus `http://localhost:5173/**` as redirect URLs.
-4. In **Authentication → Providers → Email**, enable email/password signup. Email confirmation is recommended; users must confirm before their first sign-in.
-5. Copy the **Project URL** and browser-safe **publishable/anon key** from the Supabase project API settings. Never use a `service_role` or secret key in this frontend.
-6. For a local run, copy `.env.example` to `.env` and fill `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`, then restart Vite.
-7. For GitHub Pages, open the repository **Settings → Secrets and variables → Actions → Variables** and create `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. These values are embedded in the public client bundle; security relies on Supabase Auth and RLS. Never expose a service-role key in the frontend or build.
-8. The existing Actions workflow builds and deploys after a push to `main`. GitHub Pages must use **Settings → Pages → Build and deployment → GitHub Actions**.
+4. In **Authentication → Providers → Email**, enable email/password signup. Keep email confirmation enabled.
+5. For public sign-ups and password resets, configure a custom SMTP provider with a verified sender domain in **Authentication → SMTP Settings**. Supabase's default email service only sends to project-team addresses and is heavily rate-limited; it is for testing, not public use. See [Supabase custom SMTP setup](https://supabase.com/docs/guides/auth/auth-smtp). Enter the SMTP password only in Supabase, never in the frontend or GitHub variables.
+6. Copy the **Project URL** and browser-safe **publishable/anon key** from the Supabase project API settings. Never use a `service_role` or secret key in this frontend.
+7. For a local run, copy `.env.example` to `.env` and fill `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`, then restart Vite.
+8. For GitHub Pages, open the repository **Settings → Secrets and variables → Actions → Variables** and create `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. These values are embedded in the public client bundle; security relies on Supabase Auth and RLS. Never expose a service-role key in the frontend or build.
+9. The existing Actions workflow builds and deploys after a push to `main`. GitHub Pages must use **Settings → Pages → Build and deployment → GitHub Actions**.
 
 Until the Supabase URL and publishable key are configured in GitHub's Actions variables, the site intentionally shows a setup notice and disables sign-in. No Supabase project or database credentials are configured in this repository.
 
