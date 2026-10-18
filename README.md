@@ -8,7 +8,7 @@ The public demo starts with a generic profile. Set your own name and date of bir
 
 - Responsive dark/light dashboard with a live clock, timezone setting, and date-of-birth-based age.
 - Per-date timetable with activity statuses, notes, reminders, schedule edits, filters, and a month calendar.
-- Exercise finder with set completion logs and explicit workout completion.
+- Date-driven six-day Push/Pull/Legs A/B training split with distinct daily sessions, muscle-region targets, set/rep/rest guidance, a recovery day, and saved set completion logs.
 - Weight history and a trend chart based only on saved weigh-ins.
 - Editable starter food diary, consumed-item nutrition totals, and explicit water logging.
 - Python/SQL topic checklists, manual study-session logs, SSC CGL session records, and mock-test accuracy.
@@ -59,7 +59,7 @@ The repository includes a GitHub Actions Pages deployment workflow. On each push
 - Completion is always explicit; elapsed time never changes activity, meal, workout, or topic status.
 - Nutrition values are approximate starter estimates intended for editing, not medical advice. Food is counted only after marking it consumed; cooked rice, raw-weight chicken, and dry chana are labeled distinctly.
 - Streaks, weekly reports, background reminders, Pomodoro timers, and timed study sessions are not implemented. Reminders are in-app indicators only; browser push notifications are not enabled.
-- The workout page contains a searchable exercise library and saved set checkboxes, but does not yet record repetitions/loads, calculate volume/PRs, or configure a weekly split.
+- Training sessions are assigned by the selected date's weekday. Set checkboxes and workout completion remain date-keyed and sync with the signed-in account; the plan does not record working loads/reps or calculate volume/PRs. It is a general template, not individualized medical or coaching advice.
 - Calendar provides a month view; week/day calendar views and automatic copying of the prior day's schedule are not included.
 - CSV export is available for activities, weigh-ins, and study records. Nutrition and workout export are not yet included.
 
