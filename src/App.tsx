@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Session } from '@supabase/supabase-js'
 import {
   Activity, Apple, ArrowLeft, ArrowRight, BarChart3, Bell, CalendarDays,
   Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3,
-  Dumbbell, Download, Droplets, Flame, GraduationCap, LayoutDashboard, Menu, Moon,
+  Dumbbell, Download, Droplets, Flame, GraduationCap, LayoutDashboard, LogOut, Menu, Moon,
   Plus, Search, Settings, ShieldAlert, Sun, Target, Trash2, TrendingDown, Trophy,
   Weight, X,
 } from 'lucide-react'
 import './App.css'
+import AuthScreen from './AuthScreen'
+import { supabase } from './lib/supabase'
+import type { Json } from './lib/database.types'
 
 type Page = 'Overview' | 'Schedule' | 'Calendar' | 'Training' | 'Weight' | 'Nutrition' | 'Learning' | 'SSC CGL' | 'Reports' | 'Settings'
 type Status = 'Not Started' | 'In Progress' | 'Completed' | 'Skipped'
@@ -82,27 +86,158 @@ function defaults(): AppData {
     templates: initialTemplates, activities: {}, weights: [], foods: {}, water: {}, completedTopics: [], studyLogs: [], examLogs: [], mocks: [], setLogs: {}, finishedWorkouts: [],
   }
 }
-function useAppData() {
-  const [data, setData] = useState<AppData>(() => {
-    try {
-      const raw = localStorage.getItem(KEY)
-      return raw ? { ...defaults(), ...JSON.parse(raw) } as AppData : defaults()
-    } catch (error) {
-      console.error('Could not load saved Life OS data', error)
-      return defaults()
-    }
-  })
-  const [storageError, setStorageError] = useState('')
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+function isAppData(value: unknown): value is AppData {
+  return isJsonRecord(value)
+    && isJsonRecord(value.profile)
+    && typeof value.profile.name === 'string'
+    && Array.isArray(value.templates)
+    && isJsonRecord(value.activities)
+    && isJsonRecord(value.foods)
+    && isJsonRecord(value.water)
+    && Array.isArray(value.weights)
+    && Array.isArray(value.completedTopics)
+    && Array.isArray(value.studyLogs)
+    && Array.isArray(value.examLogs)
+    && Array.isArray(value.mocks)
+    && isJsonRecord(value.setLogs)
+    && Array.isArray(value.finishedWorkouts)
+}
+function normalizeData(value: unknown, userName: string): AppData {
+  const initial = defaults()
+  if (!isAppData(value)) return { ...initial, profile: { ...initial.profile, name: userName || initial.profile.name } }
+  return {
+    ...initial,
+    ...value,
+    profile: { ...initial.profile, ...value.profile, name: value.profile.name || userName || initial.profile.name },
+  }
+}
+function useAppData(userId: string, userName: string) {
+  const [data, setData] = useState<AppData>(() => ({ ...defaults(), profile: { ...defaults().profile, name: userName || 'Demo User' } }))
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved')
+  const [saveError, setSaveError] = useState('')
+  const [migrationPending, setMigrationPending] = useState(false)
+  const [reloadToken, setReloadToken] = useState(0)
+  const [saveToken, setSaveToken] = useState(0)
+  const canSave = useRef(false)
+  const legacyData = useRef<AppData | null>(null)
+  const saveQueue = useRef<Promise<void>>(Promise.resolve())
+  const revision = useRef(0)
+  const enqueueSave = useCallback((write: () => Promise<void>) => {
+    const next = saveQueue.current.then(write)
+    saveQueue.current = next.catch(() => undefined)
+    return next
+  }, [])
+
   useEffect(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(data))
-      window.setTimeout(() => setStorageError(''), 0)
-    } catch (error) {
-      console.error('Could not save Life OS data', error)
-      window.setTimeout(() => setStorageError('Your changes could not be saved in this browser. Check available storage and try again.'), 0)
+    let cancelled = false
+    canSave.current = false
+
+    const load = async () => {
+      if (!supabase) {
+        setLoadError('Cloud storage is not configured. Add the Supabase project URL and publishable key, then rebuild.')
+        setLoading(false)
+        return
+      }
+      try {
+        const { data: record, error } = await supabase
+          .from('user_life_os_data')
+          .select('data')
+          .eq('user_id', userId)
+          .maybeSingle()
+        if (error) throw error
+        if (cancelled) return
+
+        if (record) {
+          setData(normalizeData(record.data, userName))
+          canSave.current = true
+        } else {
+          let imported: AppData | null = null
+          try {
+            const local = localStorage.getItem(KEY)
+            if (local) {
+              const parsed: unknown = JSON.parse(local)
+              if (isAppData(parsed)) imported = parsed
+            }
+          } catch (cause) {
+            console.error('Could not inspect legacy browser data for optional import', cause)
+          }
+          legacyData.current = imported
+          setData({ ...defaults(), profile: { ...defaults().profile, name: userName || 'Demo User' } })
+          if (imported) setMigrationPending(true)
+          else canSave.current = true
+        }
+      } catch (cause) {
+        console.error('Could not load account data', cause)
+        if (!cancelled) setLoadError(cause instanceof Error ? cause.message : 'Could not load your saved data.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
     }
-  }, [data])
-  return { data, setData, storageError }
+
+    void load()
+    return () => { cancelled = true }
+  }, [userId, userName, reloadToken])
+
+  useEffect(() => {
+    if (loading || migrationPending || !canSave.current || !supabase) return
+    const currentRevision = ++revision.current
+    setSaveStatus('saving')
+    setSaveError('')
+    const timer = window.setTimeout(() => {
+      const serialized = JSON.stringify(data)
+      const payload = JSON.parse(serialized) as Json
+      const nextSave = enqueueSave(async () => {
+        if (!supabase) throw new Error('Cloud storage is not configured.')
+        const { error } = await supabase.from('user_life_os_data').upsert({
+          user_id: userId,
+          data: payload,
+          updated_at: timestampNow(),
+        })
+        if (error) throw error
+      })
+      void nextSave.then(() => {
+        if (revision.current === currentRevision) setSaveStatus('saved')
+      }).catch(cause => {
+        console.error('Could not save account data', cause)
+        if (revision.current === currentRevision) {
+          setSaveStatus('error')
+          setSaveError(cause instanceof Error ? cause.message : 'Your changes could not be saved. Please retry.')
+        }
+      })
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [data, enqueueSave, loading, migrationPending, userId, saveToken])
+
+  const importLegacyData = () => {
+    if (!legacyData.current) return
+    const imported = normalizeData(legacyData.current, userName)
+    if (userName) imported.profile.name = userName
+    setData(imported)
+    legacyData.current = null
+    canSave.current = true
+    setMigrationPending(false)
+  }
+  const discardLegacyData = () => {
+    legacyData.current = null
+    canSave.current = true
+    setMigrationPending(false)
+  }
+  return {
+    data, setData, loading, loadError, saveStatus, saveError, migrationPending,
+    importLegacyData, discardLegacyData,
+    reload: () => {
+      setLoading(true)
+      setLoadError('')
+      setReloadToken(value => value + 1)
+    },
+    retrySave: () => setSaveToken(value => value + 1),
+    enqueueSave,
+  }
 }
 function ageParts(dob: string, now = new Date()) {
   const birth = new Date(`${dob}T00:00:00`)
@@ -155,8 +290,51 @@ function getFoods(data: AppData, date: string): FoodItem[] {
   ].map(item => ({ ...item, baseQuantity: item.quantity, baseCalories: item.calories, baseProtein: item.protein, baseCarbs: item.carbs, baseFat: item.fat, baseFibre: item.fibre }))
 }
 
-function App() {
-  const { data, setData, storageError } = useAppData()
+export default function App() {
+  const client = supabase
+  const [session, setSession] = useState<Session | null>(null)
+  const [authReady, setAuthReady] = useState(() => !client)
+  const [authError, setAuthError] = useState('')
+  const [passwordRecovery, setPasswordRecovery] = useState(false)
+
+  useEffect(() => {
+    if (!client) return
+    let active = true
+    void client.auth.getSession().then(({ data: result, error }) => {
+      if (!active) return
+      if (error) setAuthError(error.message)
+      else setSession(result.session)
+      setAuthReady(true)
+    }).catch(cause => {
+      console.error('Could not restore sign-in session', cause)
+      if (active) {
+        setAuthError(cause instanceof Error ? cause.message : 'Could not restore your sign-in session.')
+        setAuthReady(true)
+      }
+    })
+    const { data: listener } = client.auth.onAuthStateChange((event, nextSession) => {
+      setSession(nextSession)
+      setAuthError('')
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
+      setAuthReady(true)
+    })
+    return () => { active = false; listener.subscription.unsubscribe() }
+  }, [client])
+
+  if (!client) return <AuthScreen configured={false} />
+  if (!authReady) return <div className="auth-loading" role="status">Restoring your secure session…</div>
+  if (passwordRecovery && session) return <AuthScreen configured recovery onRecoveryComplete={() => setPasswordRecovery(false)} />
+  if (!session) return <AuthScreen configured onAuthError={authError} />
+  const user = session.user
+  const userName = typeof user.user_metadata.full_name === 'string' ? user.user_metadata.full_name : ''
+  return <LifeOS key={user.id} userId={user.id} userName={userName} onSignOut={async () => {
+    const { error } = await client.auth.signOut()
+    if (error) throw error
+  }} />
+}
+
+function LifeOS({ userId, userName, onSignOut }: { userId: string; userName: string; onSignOut: () => Promise<void> }) {
+  const { data, setData, loading, loadError, saveStatus, saveError, migrationPending, importLegacyData, discardLegacyData, reload, retrySave, enqueueSave } = useAppData(userId, userName)
   const [page, setPage] = useState<Page>('Overview')
   const [selectedDate, setSelectedDate] = useState(localDate(data.profile.timezone))
   const [clock, setClock] = useState(() => new Date())
@@ -166,6 +344,7 @@ function App() {
   const [calendarMonth, setCalendarMonth] = useState(new Date(`${selectedDate}T12:00:00`))
   const [activityFilter, setActivityFilter] = useState('All')
   const [toast, setToast] = useState('')
+  const [signOutError, setSignOutError] = useState('')
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 1000)
     return () => window.clearInterval(timer)
@@ -176,6 +355,9 @@ function App() {
     const timer = window.setTimeout(() => setToast(''), 2400)
     return () => window.clearTimeout(timer)
   }, [toast])
+
+  if (loading) return <div className="auth-loading" role="status">Loading your saved Life OS data…</div>
+  if (loadError) return <main className="auth-loading"><div className="load-error-card" role="alert"><ShieldAlert size={22} /><h1>We couldn’t load your account data</h1><p>{loadError}</p><div><button className="button button-primary" onClick={reload}>Retry</button><button className="button button-muted" onClick={() => void onSignOut()}>Sign out</button></div></div></main>
 
   const today = localDate(data.profile.timezone)
   const activities = data.activities[selectedDate] ?? makeDay(data.templates)
@@ -192,6 +374,22 @@ function App() {
   const greeting = clock.getHours() < 12 ? 'Good morning' : clock.getHours() < 18 ? 'Good afternoon' : 'Good evening'
   const selectedDisplay = displayDate(selectedDate)
   const setProfile = (key: keyof AppData['profile'], value: string | number | 'dark' | 'light') => setData(previous => ({ ...previous, profile: { ...previous.profile, [key]: value } }))
+  const signOutAndSave = async () => {
+    if (migrationPending) { await onSignOut(); return }
+    const serialized = JSON.stringify(data)
+    const payload = JSON.parse(serialized) as Json
+    const save = enqueueSave(async () => {
+      if (!supabase) throw new Error('Cloud storage is not configured.')
+      const { error } = await supabase.from('user_life_os_data').upsert({
+        user_id: userId,
+        data: payload,
+        updated_at: timestampNow(),
+      })
+      if (error) throw error
+    })
+    await save
+    await onSignOut()
+  }
   const changeDate = (offset: number) => {
     const next = new Date(`${selectedDate}T12:00:00`)
     next.setDate(next.getDate() + offset)
@@ -389,13 +587,13 @@ function App() {
       const totalMinutes = totalLogs.reduce((sum, log) => sum + log.minutes, 0)
       return <><div className="page-toolbar"><div><p className="eyebrow">CALCULATED FROM YOUR SAVED RECORDS</p><h2>Reports & insights</h2></div><button className="button button-primary" onClick={() => downloadCsv('dileep-life-os-activities.csv', [['date', 'activity', 'category', 'status', 'start', 'end', 'notes'], ...Object.entries(data.activities).flatMap(([date, items]) => items.map(item => [date, item.title, item.category, item.status, item.start, item.end, item.notes]))])}><Download size={16} /> Export activities</button></div><section className="stat-grid"><Stat icon={Activity} label="Activities recorded" value={Object.values(data.activities).flat().length.toString()} detail="Across saved dates" accent="blue" /><Stat icon={Dumbbell} label="Workouts finished" value={data.finishedWorkouts.length.toString()} detail="Explicitly marked complete" accent="violet" /><Stat icon={Clock3} label="Study time logged" value={`${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`} detail="Technical and SSC CGL sessions" accent="orange" /><Stat icon={Trophy} label="Topics completed" value={data.completedTopics.length.toString()} detail="Python and SQL topics" accent="cyan" /></section><div className="reports-grid"><Card><h3>Activity records</h3>{Object.keys(data.activities).length ? Object.entries(data.activities).sort(([a], [b]) => b.localeCompare(a)).slice(0, 10).map(([date, items]) => { const done = items.filter(item => item.status === 'Completed').length; return <div className="history-row" key={date}><span>{date}</span><strong>{done}/{items.length} completed</strong><span>{items.length ? percent(done, items.length) : 0}%</span></div> }) : <Empty text="Activity reports appear as you save daily records." />}</Card><Card><h3>Study by category</h3><div className="report-metric"><span>Python & SQL</span><strong>{data.studyLogs.reduce((sum, log) => sum + log.minutes, 0)} min</strong></div><div className="report-metric"><span>SSC CGL</span><strong>{data.examLogs.reduce((sum, log) => sum + log.minutes, 0)} min</strong></div><div className="report-metric"><span>Recorded weigh-ins</span><strong>{data.weights.length}</strong></div><div className="report-metric"><span>Water entries</span><strong>{Object.values(data.water).flat().length}</strong></div></Card></div><div className="inline-note"><ShieldAlert size={15} /><span>Export only contains records saved in this browser. Planned duration is not presented as actual time spent.</span></div></>
     }
-    return <><div className="page-toolbar"><div><p className="eyebrow">PERSONALIZE YOUR SPACE</p><h2>Settings</h2></div></div><div className="settings-layout"><Card><div className="card-heading"><div><p className="eyebrow">PROFILE</p><h3>Personal details</h3></div></div><Setting label="Full name"><input value={data.profile.name} onChange={event => setProfile('name', event.target.value)} /></Setting><Setting label="Date of birth"><input type="date" value={data.profile.dob} onChange={event => setProfile('dob', event.target.value)} /></Setting><Setting label="Timezone"><select value={data.profile.timezone} onChange={event => setProfile('timezone', event.target.value)}><option>Asia/Kolkata</option><option>Asia/Dubai</option><option>Europe/London</option><option>America/New_York</option><option>UTC</option></select></Setting></Card><Card><div className="card-heading"><div><p className="eyebrow">GOALS & PREFERENCES</p><h3>Daily targets</h3></div></div><Setting label="Starting weight (kg)"><input type="number" value={data.profile.startWeight} onChange={event => setProfile('startWeight', Number(event.target.value))} /></Setting><Setting label="Goal weight (kg)"><input type="number" value={data.profile.goalWeight} onChange={event => setProfile('goalWeight', Number(event.target.value))} /></Setting><Setting label="Calorie target (estimate)"><input type="number" value={data.profile.calorieGoal} onChange={event => setProfile('calorieGoal', Number(event.target.value))} /></Setting><Setting label="Protein target (g)"><input type="number" value={data.profile.proteinGoal} onChange={event => setProfile('proteinGoal', Number(event.target.value))} /></Setting><Setting label="Water goal (ml)"><input type="number" value={data.profile.waterGoal} onChange={event => setProfile('waterGoal', Number(event.target.value))} /></Setting><Setting label="Appearance"><select value={data.profile.theme} onChange={event => setProfile('theme', event.target.value as 'dark' | 'light')}><option value="dark">Dark</option><option value="light">Light</option></select></Setting></Card><Card><div className="card-heading"><div><p className="eyebrow">DATA & PRIVACY</p><h3>Device storage</h3></div><ShieldAlert className="muted-icon" size={18} /></div><p className="subtle">This demo stores personal records in local browser storage. It is not encrypted, not shared across devices, and does not provide account sign-in or cloud backup.</p><button className="button button-muted export-settings" onClick={() => downloadCsv('dileep-life-os-weights.csv', [['date', 'weight_kg', 'waist_cm', 'notes'], ...data.weights.map(item => [item.date, item.weight, item.waist ?? '', item.notes])])}><Download size={15} /> Export weigh-ins</button><button className="button button-muted export-settings" onClick={() => downloadCsv('dileep-life-os-study.csv', [['date', 'type', 'topic', 'minutes'], ...data.studyLogs.map(log => [log.date, 'Technical', log.label, log.minutes]), ...data.examLogs.map(log => [log.date, 'SSC CGL', log.label, log.minutes])])}><Download size={15} /> Export study sessions</button><button className="button button-danger export-settings" onClick={() => { if (window.confirm('Delete all DILEEP LIFE OS data saved in this browser? This cannot be undone.')) { localStorage.removeItem(KEY); setData(defaults()); setToast('Local data cleared') } }}><Trash2 size={15} /> Clear local data</button></Card></div><div className="inline-note"><Bell size={15} /><span>Activity reminders are in-app indicators only. Browser notifications and background push reminders are not enabled.</span></div></>
+    return <><div className="page-toolbar"><div><p className="eyebrow">PERSONALIZE YOUR SPACE</p><h2>Settings</h2></div></div><div className="settings-layout"><Card><div className="card-heading"><div><p className="eyebrow">PROFILE</p><h3>Personal details</h3></div></div><Setting label="Full name"><input value={data.profile.name} onChange={event => setProfile('name', event.target.value)} /></Setting><Setting label="Date of birth"><input type="date" value={data.profile.dob} onChange={event => setProfile('dob', event.target.value)} /></Setting><Setting label="Timezone"><select value={data.profile.timezone} onChange={event => setProfile('timezone', event.target.value)}><option>Asia/Kolkata</option><option>Asia/Dubai</option><option>Europe/London</option><option>America/New_York</option><option>UTC</option></select></Setting></Card><Card><div className="card-heading"><div><p className="eyebrow">GOALS & PREFERENCES</p><h3>Daily targets</h3></div></div><Setting label="Starting weight (kg)"><input type="number" value={data.profile.startWeight} onChange={event => setProfile('startWeight', Number(event.target.value))} /></Setting><Setting label="Goal weight (kg)"><input type="number" value={data.profile.goalWeight} onChange={event => setProfile('goalWeight', Number(event.target.value))} /></Setting><Setting label="Calorie target (estimate)"><input type="number" value={data.profile.calorieGoal} onChange={event => setProfile('calorieGoal', Number(event.target.value))} /></Setting><Setting label="Protein target (g)"><input type="number" value={data.profile.proteinGoal} onChange={event => setProfile('proteinGoal', Number(event.target.value))} /></Setting><Setting label="Water goal (ml)"><input type="number" value={data.profile.waterGoal} onChange={event => setProfile('waterGoal', Number(event.target.value))} /></Setting><Setting label="Appearance"><select value={data.profile.theme} onChange={event => setProfile('theme', event.target.value as 'dark' | 'light')}><option value="dark">Dark</option><option value="light">Light</option></select></Setting></Card><Card><div className="card-heading"><div><p className="eyebrow">DATA & PRIVACY</p><h3>Account data</h3></div><ShieldAlert className="muted-icon" size={18} /></div><p className="subtle">Your data is stored in your signed-in account and protected by row-level database policies. Export a copy regularly; access requires your account and configured Supabase project.</p><button className="button button-muted export-settings" onClick={() => downloadCsv('dileep-life-os-weights.csv', [['date', 'weight_kg', 'waist_cm', 'notes'], ...data.weights.map(item => [item.date, item.weight, item.waist ?? '', item.notes])])}><Download size={15} /> Export weigh-ins</button><button className="button button-muted export-settings" onClick={() => downloadCsv('dileep-life-os-study.csv', [['date', 'type', 'topic', 'minutes'], ...data.studyLogs.map(log => [log.date, 'Technical', log.label, log.minutes]), ...data.examLogs.map(log => [log.date, 'SSC CGL', log.label, log.minutes])])}><Download size={15} /> Export study sessions</button><button className="button button-danger export-settings" onClick={() => { if (window.confirm('Reset all Life OS data in this account to defaults? This cannot be undone.')) { setData({ ...defaults(), profile: { ...defaults().profile, name: userName || 'Demo User' } }); setToast('Account data reset and queued for cloud save') } }}><Trash2 size={15} /> Reset account data</button></Card></div><div className="inline-note"><Bell size={15} /><span>Activity reminders are in-app indicators only. Browser notifications and background push reminders are not enabled.</span></div></>
   }
 
   return <div className="app-shell">
     <aside className={`sidebar ${menuOpen ? 'mobile-open' : ''}`}><div className="brand"><div className="brand-mark"><Activity size={20} /></div><div><strong>DILEEP<span> LIFE OS</span></strong><small>PERSONAL COMMAND CENTER</small></div><button className="mobile-close icon-button" aria-label="Close navigation" onClick={() => setMenuOpen(false)}><X size={18} /></button></div><div className="workspace-label">WORKSPACE</div><nav aria-label="Main navigation">{NAV.map(item => { const Icon = item.icon; return <button key={item.name} className={`nav-item ${page === item.name ? 'nav-active' : ''}`} onClick={() => { setPage(item.name); setMenuOpen(false) }}><Icon size={17} strokeWidth={1.8} /><span>{item.name}</span>{page === item.name && <i />}</button> })}</nav><div className="sidebar-bottom"><div className="sidebar-profile"><div className="avatar">D</div><div><strong>{data.profile.name.split(' ')[1] ?? 'Dileep'}</strong><span>Personal workspace</span></div><ChevronDown size={14} /></div><div className="local-tag"><span />LOCAL DEMO · DEVICE ONLY</div></div></aside>
     {menuOpen && <button className="mobile-backdrop" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
-    <main className="main-area"><header className="topbar"><div className="topbar-left"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMenuOpen(true)}><Menu size={19} /></button><span className="breadcrumb">Life OS</span><ChevronRight size={14} /><strong>{page}</strong></div><div className="topbar-right"><span className="topbar-date">{clock.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}</span><button className="icon-button theme-toggle" aria-label="Toggle theme" onClick={() => setProfile('theme', data.profile.theme === 'dark' ? 'light' : 'dark')}>{data.profile.theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button><div className="top-avatar">D</div></div></header><div className="page-content"><div className="content-title"><div><p className="eyebrow">DILEEP LIFE OS <span className="meta-dot" /> {data.profile.timezone}</p><h1>{pageTitle[page]}</h1></div>{page !== 'Overview' && page !== 'Settings' && page !== 'Calendar' && page !== 'Training' && page !== 'Learning' && page !== 'SSC CGL' && page !== 'Reports' && page !== 'Weight' && page !== 'Nutrition' && <span className="subtle">{selectedDisplay}</span>}</div>{storageError && <div className="storage-error" role="alert"><ShieldAlert size={16} />{storageError}</div>}{pageContent()}<footer className="footer-note"><span>Made for steady progress, not perfect days.</span><span>LOCAL-FIRST DEMO · NO ACCOUNT OR CLOUD SYNC</span></footer></div></main>
+    <main className="main-area"><header className="topbar"><div className="topbar-left"><button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMenuOpen(true)}><Menu size={19} /></button><span className="breadcrumb">Life OS</span><ChevronRight size={14} /><strong>{page}</strong></div><div className="topbar-right"><span className={`cloud-save-status ${saveStatus}`} role="status">{saveStatus === 'saving' ? 'Saving…' : saveStatus === 'error' ? 'Save failed' : 'Cloud saved'}</span><span className="topbar-date">{clock.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}</span><button className="icon-button theme-toggle" aria-label="Toggle theme" onClick={() => setProfile('theme', data.profile.theme === 'dark' ? 'light' : 'dark')}>{data.profile.theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button><div className="top-avatar" title={userName || 'Account'}>{(data.profile.name.trim()[0] || 'U').toUpperCase()}</div><button className="icon-button signout-button" aria-label="Sign out" title="Sign out" onClick={() => void signOutAndSave().catch(error => { console.error('Sign out failed', error); setSignOutError(error instanceof Error ? error.message : 'Could not sign out') })}><LogOut size={16} /></button></div></header><div className="page-content"><div className="content-title"><div><p className="eyebrow">DILEEP LIFE OS <span className="meta-dot" /> {data.profile.timezone}</p><h1>{pageTitle[page]}</h1></div>{page !== 'Overview' && page !== 'Settings' && page !== 'Calendar' && page !== 'Training' && page !== 'Learning' && page !== 'SSC CGL' && page !== 'Reports' && page !== 'Weight' && page !== 'Nutrition' && <span className="subtle">{selectedDisplay}</span>}</div>{saveError && <div className="storage-error" role="alert"><ShieldAlert size={16} /><span>Cloud save failed: {saveError}</span><button className="button button-muted" onClick={retrySave}>Retry save</button></div>}{signOutError && <div className="storage-error" role="alert"><ShieldAlert size={16} />{signOutError}</div>}{migrationPending && <div className="migration-banner"><div><strong>Existing data found on this browser</strong><span>Import it into this signed-in account? It will be copied to your private cloud record.</span></div><button className="button button-primary" onClick={importLegacyData}>Import this browser’s data</button><button className="button button-muted" onClick={discardLegacyData}>Start fresh</button></div>}{pageContent()}<footer className="footer-note"><span>Made for steady progress, not perfect days.</span><span>PRIVATE ACCOUNT · CLOUD SYNC</span></footer></div></main>
     {toast && <div role="status" className="toast"><CheckCircle2 size={16} />{toast}</div>}
   </div>
 }
@@ -409,5 +607,3 @@ function Empty({ text }: { text: string }) { return <div className="empty-state"
 function Progress({ value, label }: { value: number; label: string }) { return <div className="progress-block"><div className="progress-track"><span style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div><div className="progress-label"><strong>{label}</strong><span>{Math.round(value)}%</span></div></div> }
 function Stat({ icon: Icon, label, value, detail, accent }: { icon: typeof Activity; label: string; value: string; detail: string; accent: string }) { return <Card className="stat-card"><div className={`stat-icon ${accent}`}><Icon size={18} /></div><span className="stat-label">{label}</span><strong className="stat-value">{value}</strong><span className="stat-detail">{detail}</span></Card> }
 function Setting({ label, children }: { label: string; children: React.ReactNode }) { return <label className="setting-row"><span>{label}</span>{children}</label> }
-
-export default App
