@@ -25,28 +25,52 @@ npm run dev
 
 Create a production build with `npm run build`; run the source linter with `npm run lint`.
 
+## Authentication and persistent cloud data
+
+The app uses Supabase Auth (email/password) and stores each signed-in user's Life OS data in a private PostgreSQL row. The SQL migration enables row-level security and only permits an authenticated user to read or modify their own row. Saved records sync to that account and load again when the user returns on another device.
+
+### Configure a Supabase project
+
+1. Create a project at [Supabase](https://supabase.com/dashboard). Keep the database password private.
+2. In **SQL Editor**, run [`supabase/migrations/20261018000000_user_life_os_data.sql`](./supabase/migrations/20261018000000_user_life_os_data.sql).
+3. In **Authentication → URL Configuration**, set the site URL to `https://dileep-royal71.github.io/dileep-life-os/` and allow that URL plus `http://localhost:5173/**` as redirect URLs.
+4. In **Authentication → Providers → Email**, enable email/password signup. Email confirmation is recommended; users must confirm before their first sign-in.
+5. Copy the **Project URL** and browser-safe **publishable/anon key** from the Supabase project API settings. Never use a `service_role` or secret key in this frontend.
+6. For a local run, copy `.env.example` to `.env` and fill `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`, then restart Vite.
+7. For GitHub Pages, open the repository **Settings → Secrets and variables → Actions → Variables** and create `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. These values are embedded in the public client bundle; security relies on Supabase Auth and RLS. Never expose a service-role key in the frontend or build.
+8. The existing Actions workflow builds and deploys after a push to `main`. GitHub Pages must use **Settings → Pages → Build and deployment → GitHub Actions**.
+
+Until the Supabase URL and publishable key are configured in GitHub's Actions variables, the site intentionally shows a setup notice and disables sign-in. No Supabase project or database credentials are configured in this repository.
+
+Existing records under the old `dileep-life-os-v1` browser key are never uploaded automatically. After first sign-in, if such data exists in the current browser, the user can explicitly import it into their account or start fresh.
+
 ## Data and privacy
 
-This implementation is a local-first demo. It saves records in the browser's `localStorage` under the key `dileep-life-os-v1`. Data remains on that browser/device, is not encrypted by this app, and is not synchronized or backed up. Clearing browser storage or using the in-app clear action permanently removes it.
+Supabase stores the app's JSON state in a row whose `user_id` references `auth.users`; database RLS prevents one account from accessing another account's row. Supabase Auth manages passwords and browser sessions. Review the Supabase project's backups, retention, and security settings for your needs. A public frontend key is not an authorization boundary; the RLS policies are essential.
 
-There is no configured Supabase project, authentication provider, backend, or database in this workspace. Therefore, this app does **not** provide account creation, secure sign-in, protected routes, server-side validation, multi-device access, or row-level security. Do not use this demo to store sensitive information. A production deployment should add Supabase Auth, PostgreSQL migrations, and row-level security policies before collecting personal records.
+## Publish with GitHub Pages
+
+The repository includes a GitHub Actions Pages deployment workflow. On each push to `main`, it runs the production build and publishes `dist/`. In the repository, open **Settings → Pages** and set **Build and deployment → Source** to **GitHub Actions**. After the first successful workflow run, the site is available at `https://dileep-royal71.github.io/dileep-life-os/`.
 
 ## Data behavior and limitations
 
 - Schedule entries, completion state, notes, and set logs are associated with the selected date.
 - Completion is always explicit; elapsed time never changes activity, meal, workout, or topic status.
 - Nutrition values are approximate starter estimates intended for editing, not medical advice. Food is counted only after marking it consumed; cooked rice, raw-weight chicken, and dry chana are labeled distinctly.
-- Streaks, weekly reports, background reminders, Pomodoro timers, session timing, and cross-device sync are not implemented. Reminders are in-app indicators only; browser push notifications are not enabled.
+- Streaks, weekly reports, background reminders, Pomodoro timers, and timed study sessions are not implemented. Reminders are in-app indicators only; browser push notifications are not enabled.
 - The workout page contains a searchable exercise library and saved set checkboxes, but does not yet record repetitions/loads, calculate volume/PRs, or configure a weekly split.
 - Calendar provides a month view; week/day calendar views and automatic copying of the prior day's schedule are not included.
 - CSV export is available for activities, weigh-ins, and study records. Nutrition and workout export are not yet included.
 
 ## Project structure
 
-- `src/App.tsx` — application views, data types, date-scoped interactions, and local persistence.
+- `src/App.tsx` — application views, date-scoped interactions, authentication session, and cloud persistence.
+- `src/AuthScreen.tsx` — email/password sign-in, registration, password-reset requests, and password updates.
+- `src/lib/supabase.ts` — typed Supabase client configuration.
+- `supabase/migrations/` — PostgreSQL table and row-level security setup.
 - `src/App.css` — responsive application components and layouts.
 - `src/index.css` — global styles and theme tokens.
 
 ## Schema direction for a backend
 
-The local state models a profile/preferences record, schedule templates, date-keyed daily activities, weigh-ins, food entries, water entries, learning topic status, study sessions, mock tests, and date-keyed workout set logs. A production schema should normalize these into user-owned tables (`profiles`, `daily_schedules`, `daily_activities`, `weight_entries`, `food_items`, `nutrition_logs`, `water_logs`, `learning_topics`, `study_sessions`, `mock_test_results`, `workout_sessions`, and `workout_sets`) with foreign keys, timestamps, validation, indexes, and row-level security for every user-owned record. No production database schema or deployment is currently configured.
+The JSON state includes profile/preferences, date-keyed activities, measurements, foods, water, learning topics, study sessions, mock tests, and workout set logs. The current schema uses one RLS-protected row per authenticated user for atomic whole-state saves; normalized domain tables may be appropriate if concurrent editing or high-volume analytics are introduced.
